@@ -1,15 +1,14 @@
 %Microstructure model selection in fetal diffusion MRI
-
 %This is the main file for you to run. There are also a number of sub-functions which you will need to write.
-
 %First of all, make sure the 'summer-school-project' directory and sub-directories are on the path.
 
-%PART 1
+%% PART 1
 
 clear 
 
 %TASK - load the dmri image "dmri_2909.nii.gz" from the data folder using the "load_untouch_nii" function
-%save it as a variable called "dmri"
+%assign it to a variable called "dmri" - this will be a structure containing
+%the the image in the "img" field.
 dmri = 0;
 %TASK - use imagesc to view the first diffusion-weighted volume of the 7th z-slice of the image 
 
@@ -42,12 +41,12 @@ bvals = 0;
 %use dmri image as a template
 normdmri = dmri;
 %TASK - normalise the image to the b=0 volumes using the utilities file "normalise_to_b0"
-normdmri.img = 0;
+
 
 
 %TASK - calculate the mean normalised signal (use calculate_mean_signal) in each of the masks
 for i=1:n_masks
-	mean_norm_sig.(mask_names{i}) = calculate_mean_signal(normdmri.img,masks.(mask_names{i}));
+	mean_norm_sig.(mask_names{i}) = 0;
 end
 
 
@@ -122,7 +121,7 @@ for i=1:length(mask_names)%loop over ROI masks
 		sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 	 	
 		%TASK - minimize the sumres function for this model, subject to initvals, minvals and maxvals, using the fmincon function
-		[fitted_params.(mask_names{i}).(models{j}),fval.(mask_names{i}).(models{j})] = [];
+		%[fitted_params.(mask_names{i}).(models{j}),fval.(mask_names{i}).(models{j})] = fmincon();
 
 		%TASK - calculate the BIC for this model 
 		loglik = 0;
@@ -140,8 +139,8 @@ for i=1:length(mask_names)
 	figure;hold on;
 	%plot the data
 	plot(bvals, mean_norm_sig.(mask_names{i}),'o')
-	%plot the ADC model fit
-	plot(bvals,synth_ADC(fitted_params.(mask_names{i}).ADC,grads) + fitted_params.(mask_names{i}).ADC(1)*calculate_noise_floor(SNR.(mask_names{i})),'x')
+	%uncomment to plot the ADC model fit
+	%plot(bvals,synth_ADC(fitted_params.(mask_names{i}).ADC,grads) + fitted_params.(mask_names{i}).ADC(1)*calculate_noise_floor(SNR.(mask_names{i})),'x')
 	%TASK - add the plots for the other models  
 
 
@@ -168,8 +167,8 @@ end
 
 
 
-%% PART 2 
-%% Now we'll fit some models voxelwise to the data, starting with IVIM
+ 
+%% PART 2 - Now we'll fit some models voxelwise to the data, starting with IVIM
 % (I've given you skeleton code for a voxelwise IVIM fit - if you have time you 
 % can fit more models)
 % Warning - this will take a few minutes to run!
@@ -206,8 +205,8 @@ for j=1:length(models)
 
 	%takes a long time so we'll only fit a single slice 
 	zslice = 7;
-	%work out the number of voxels to fit
-	nvox = nnz(masks.all_masks(:,:,zslice))
+	%TASK - work out the number of voxels we need to fit using nnz
+	nvox = 0;
 
 	for x = 1:Nx
 		for y = 1:Ny
@@ -223,7 +222,7 @@ for j=1:length(models)
 					sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 
 					%TASK - minimize the sumres function for this model in this voxel, subject to initvals, minvals and maxvals, using the fmincon function
-					[fitted_params_vox,fval_vox,exitflag] = [];
+					%[fitted_params_vox,fval_vox,exitflag] = fmincon();
 
 					%store the parameter values
 					param_maps.(models{j})(x,y,z,:) = fitted_params_vox;
@@ -281,8 +280,8 @@ for j=1:length(models)
 
 	%takes a long time so we'll only fit a single slice 
 	zslice = 7;
-	%work out the number of voxels to fit
-	nvox = nnz(masks.all_masks(:,:,zslice))
+	%TASK - work out the number of voxels to fit using nnz
+	nvox = 0;
 
 	for x = 1:Nx
 		for y = 1:Ny
@@ -298,7 +297,7 @@ for j=1:length(models)
 					sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 										
 					%TASK - minimize the sumres function for this model in this voxel, subject to initvals, minvals and maxvals, using the fmincon function
-					[fitted_params_vox,fval_vox,exitflag] = 0;
+					%[fitted_params_vox,fval_vox,exitflag] = fmincon();
 
 					%store the parameter values	
 					param_maps.(models{j})(x,y,z,:) = fitted_params_vox;
