@@ -17,3 +17,4 @@ function loglik = RicianLogLik(meas, signals, sig)
 %
 %
 
+%note - you can use logbesseli0 to calculate the Bessel function term
