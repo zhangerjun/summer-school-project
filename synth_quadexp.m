@@ -26,19 +26,6 @@ function E = synth_quadexp(params,grads)
 bvals = grads(:,4);
 
 
-S0=params(1);
-f1=params(2);
-f2=params(3);
-f3=params(4);
-d1=params(5);
-d2=params(6);
-d3=params(7);
-d4=params(8);
-
-E = S0*( f1 * exp(-bvals.*d1) ...
-    + f2 * exp(-bvals.*d2) ...
-    + f3 * exp(-bvals.*d3) ...
-    + (1 - f1 - f2 - f3) * exp(-bvals.*d4));  
 
 
 

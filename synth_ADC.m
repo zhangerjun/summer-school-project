@@ -18,10 +18,7 @@ function E = synth_ADC(params,grads)
 %only need the b-values
 bvals = grads(:,4);
 
-S0 = params(1);
-D = params(2);
-% Signal
-E = S0*exp(-bvals.*D);  
+
 
 
 
