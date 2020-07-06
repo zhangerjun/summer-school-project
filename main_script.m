@@ -65,8 +65,6 @@ ylabel('signal')
 
 %Now we will fit some models to the mean signal
 
-%first we choose the matlab nonlinear fitting function options
-options = optimoptions(@lsqnonlin,'Algorithm','levenberg-marquardt');
 
 %TASK - estimate the signal to noise ratio for each mask by taking the 1 over the standard deviation of the b=0 volumes
 for i=1:length(mask_names)
