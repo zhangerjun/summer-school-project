@@ -1,71 +1,58 @@
 %Microstructure model selection in fetal diffusion MRI
+
 %This is the main file for you to run. There are also a number of sub-functions which you will need to write.
+
 %First of all, make sure the 'summer-school-project' directory and sub-directories are on the path.
 
-%% PART 1
+%PART 1
 
 clear 
-close all
+clc,close all
 
-%TASK - load the dmri image "dmri_2909.nii.gz" from the data folder using the "load_untouch_nii" function
-%assign it to a variable called "dmri" - this will be a structure containing
-%the the image in the "img" field.
-dmri = 0;
-dmri=load_untouch_nii('data/dmri_2909.nii.gz');
-%save_untouch_nii(data1,'dmri');
-%TASK - use imagesc to view the first diffusion-weighted volume of the 7th z-slice of the image 
-V = niftiread('dmri.nii');
-whos V
-V2=dmri.img(:,:,7,1);
-whos V2
-imagesc(V2)
-%TASK - convert the image to double - this helps with lots of things!
-dmri.img=double(dmri.img);
-whos dmri.img
-%TASK - zero measurements are bad news! so add the smallest floating point number (eps) to the image
-dmri.img(find(~dmri.img))=dmri.img(find(~dmri.img))+eps;
-
+%load the dmri image "dmri_2909.nii.gz" from the data folder using the "load_untouch_nii" function
+dmri = load_untouch_nii('dmri_2909.nii.gz');
+%use imagesc to view the first diffusion-weighted volume of the 7th z-slice of the image 
+figure;imagesc(dmri.img(:,:,7,1))
+%convert the image to double - this helps with lots of things!
+dmri.img = double(dmri.img);
+%zero measurements are bad news! so add the smallest floating point number (eps) to the image
+dmri.img  = dmri.img + eps;
 
 %find all mask files
 mask_filenames = dir('data/*mask*');
 n_masks = length(mask_filenames);
 
 %load the masks in a structure called masks - with fields given by the names in "mask_filenames"
-for i=1:n_masks %loop over the mask filenames
-    cd data/
-	%TASK - load the current mask to a variable called "this_mask" 
+for i=1:n_masks
 	this_mask = load_untouch_nii(mask_filenames(i).name);
-	%we use a utilities function to make a nice name for the mask 
+
 	mask_names{i} = remove_ext_from_nifti(mask_filenames(i).name);
-	%TASK - store this_mask in a field called "mask_names{i}" in a structure called masks
-	cd ..
-    masks.(mask_names{i}) = this_mask.img;
+
+	masks.(mask_names{i}) = this_mask.img;
 end
 
-%TASK - load the dmri gradient table "dmri_2909_grads.txt" using importdata
-grads = importdata('data/dmri_2909_grads.txt');
-%TASK - extract the b-value and b-vector (i.e. gradient directions) from grads 
+%load the dmri gradient table "dmri_2909_grads.txt" using importdata
+grads = importdata('dmri_2909_grads.txt');
+%extract the b-value and b-vector
 bvecs = grads(:,1:3);
 bvals = grads(:,4);
 
-%now we will normalise the image
-%use dmri image as a template
-normdmri = dmri;
 
-%TASK - normalise the image to the b=0 volumes using the utilities file "normalise_to_b0"
+%normalise the image to the b=0 volumes
+normdmri = dmri;
 normdmri.img = normalise_to_b0(dmri.img,bvals);
 
 
-%TASK - calculate the mean normalised signal (use calculate_mean_signal) in each of the masks
+%calculate the mean normalised signal (use calculate_mean_signal) in each of the masks
 for i=1:n_masks
 	mean_norm_sig.(mask_names{i}) = calculate_mean_signal(normdmri.img,masks.(mask_names{i}));
 end
 
 
-%TASK - plot the mean signal (y-axis) against b-values (x-axis) within each mask
+%plot the mean signal against b-values within each mask
 figure;hold on;
 for i=1:n_masks
-	plot(bvals,mean_norm_sig.(mask_names{i}),'o')	
+	plot(bvals, mean_norm_sig.(mask_names{i}),'o')
 end
 legend(make_nice_figure_string(mask_names))
 xlabel('b-values s/mm^2')
@@ -77,12 +64,10 @@ ylabel('signal')
 
 %Now we will fit some models to the mean signal
 
-%first we choose the matlab nonlinear fitting function options
-options = optimoptions(@lsqnonlin,'Algorithm','levenberg-marquardt');
 
-%TASK - estimate the signal to noise ratio for each mask by taking the 1 over the standard deviation of the b=0 volumes
+%next estimate the signal to noise ratio for each mask by taking the standard deviation of the b=0 volumes
 for i=1:length(mask_names)
-    this_mask_mean_sig = mean_norm_sig.(mask_names{i});
+	this_mask_mean_sig = mean_norm_sig.(mask_names{i});
 	SNR.(mask_names{i}) = 1/std(this_mask_mean_sig(bvals==0));
 end
 
@@ -108,6 +93,9 @@ minvals.quadexp = [0 0 0 0 0 0 0 0];
 maxvals.quadexp = [10 1 1 1 1 1 .05 .005];
 
 
+%function which calculates the sum of the residuals - we use an inline function for readability and simplicity 
+%otherwise would need to pass extra parameters (i.e. meas,params,grads) to fmincon,
+%(see - http://uk.mathworks.com/help/optim/ug/passing-extra-parameters.html if you really want to do this)
 
 %list of models to fit 
 models = {'ADC','IVIM','triexp','quadexp'};
@@ -118,7 +106,7 @@ models = {'ADC','IVIM','triexp','quadexp'};
 
 %now we do the fitting
 for i=1:length(mask_names)%loop over ROI masks
-	%TASK - get the dmri measurement to fit to - this ROI's normalised mean signal 
+	%get the dmri measurement to fit to - this ROI's normalised mean signal 
 	meas = mean_norm_sig.(mask_names{i})';
 	%get the sigma (standard deviation of Rician noise distribution) for this mask
 	sigma = 1/SNR.(mask_names{i});
@@ -127,41 +115,21 @@ for i=1:length(mask_names)%loop over ROI masks
 		%get this model's synthetic measurement function for passing to sumres
 		synthfun = str2func(['synth_' models{j}]);			
 
-		%define inline function for calculating sum of residuals for this model - we use an inline function for readability and simplicity 
-		%otherwise we would need to pass extra parameters (i.e. meas,params,grads) to fmincon,
-		%(see - http://uk.mathworks.com/help/optim/ug/passing-extra-parameters.html if you really want to do this)
-		%TASK - fill in RicianLogLik
+		%define inline function for calculating sum of residuals for this model  
 		sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 	 	
-		%TASK - minimize the sumres function for this model, subject to initvals, minvals and maxvals, using the fmincon function
+		%minimize the sumres function for this model, subject to initvals, minvals and maxvals
 		[fitted_params.(mask_names{i}).(models{j}),fval.(mask_names{i}).(models{j})] = fmincon(sumres,initvals.(models{j}),[],[],[],[],minvals.(models{j}),maxvals.(models{j}),[],[]);
 
-		%TASK - calculate the BIC for this model 
+		%TASK calculate the BIC for this model 
 		loglik = -fval.(mask_names{i}).(models{j});
 		nparams = length(fitted_params.(mask_names{i}).(models{j}));
 		ndata = length(meas);
 		BIC.(mask_names{i}).(models{j}) = nparams*log(ndata) - 2*loglik;
-
 	end
 end
 
 
-%now we plot the measured against synthetic signal for each mask - to see if the fits worked ok (make sure they look reasonable!)
-%note that we add the Rician noise offset to the measurements - using the calculate_noise_floor function
-for i=1:length(mask_names)
-	figure;hold on;
-	%plot the data
-	plot(bvals, mean_norm_sig.(mask_names{i}),'o')
-	%uncomment to plot the ADC model fit
-	%plot(bvals,synth_ADC(fitted_params.(mask_names{i}).ADC,grads) + fitted_params.(mask_names{i}).ADC(1)*calculate_noise_floor(SNR.(mask_names{i})),'x')
-	%TASK - add the plots for the other models  
-
-
-
-	legend({'signal','ADC'})
-	title(make_nice_figure_string(mask_names{i}))
-end
-%---------
 %plot the measured against synthetic signal for each mask - to see if the fits worked ok (make sure they look reasonable!)
 for i=1:length(mask_names)
 	figure;hold on;
@@ -184,34 +152,16 @@ for i=1:length(mask_names)
 		BIC_matrix(i,j) = BIC.(mask_names{i}).(models{j});
 	end
 end
-%make a barplot of the BIC values for all models - grouped by ROI masks
+%TASK - make a barplot of the BIC values for all models - grouped by ROI masks
 figure;
 bar(categorical(make_nice_figure_string(mask_names)),BIC_matrix)
 legend(models)
-%--------
+ylabel('Bayesian Information Criterion')
 
 
 
-
-%TASK - have a look at the BIC values for each model in each ROI (lowest BIC indicates the model that explains the data best)
-%Do the results make sense?
-
-%put the BIC values in a matrix so it's easy to do a barplot
-BIC_matrix = zeros(length(mask_names),length(models));
-for i=1:length(mask_names)
-	for j=1:length(models)
-		BIC_matrix(i,j) = BIC.(mask_names{i}).(models{j});
-	end
-end
-%TASK - make a barplot of the BIC values for all models - grouped by ROI masks
-
-
-
-
-
-
- 
-%% PART 2 - Now we'll fit some models voxelwise to the data, starting with IVIM
+%PART 2 
+%% Now we'll fit some models voxelwise to the data, starting with IVIM
 % (I've given you skeleton code for a voxelwise IVIM fit - if you have time you 
 % can fit more models)
 % Warning - this will take a few minutes to run!
@@ -222,41 +172,46 @@ SNR = 20;
 sigma = 1/SNR;
 
 
-%TASK - get the dimensions of the image
-Nx = 0;
-Ny = 0;
-Nz = 0;
+%get the dimensions of the image
+Nx = size(dmri.img,1);
+Ny = size(dmri.img,2);
+Nz = size(dmri.img,3);
 
 
 %we'll store the parameters and BIC values in arrays so we can plot them later 
-%define the number of parameters in the IVIM model
 nparam_IVIM = 4;
-%TASK - initialise these arrays as zero arrays -the BIC arrays should be Nx x Ny x Nz, 
+%TASK - initialise these arrays as zeros -the BIC arrays should be Nx x Ny x Nz, 
 %the parameter arrays Nx x Ny x Nz x number of model parameters
-param_maps.IVIM = 0;
-BIC_map.IVIM = 0;
+param_maps.IVIM = zeros([size(masks.all_masks) nparam_IVIM]);
+BIC_map.IVIM = zeros(size(masks.all_masks));
+
+
+nparam_ADC = 2;
+param_maps.ADC = zeros([size(masks.all_masks) nparam_ADC]);
+BIC_map.ADC = zeros(size(masks.all_masks));
 
 
 
-%you can add more models here later if you have time!
-models = {'IVIM'};
+%(add more models here if you have time!)
+models = {'ADC','IVIM'};
 
-%do the voxelwise fitting for each model 
+
 for j=1:length(models)
+
 	%set up a counter
 	l=1;
 
 	%takes a long time so we'll only fit a single slice 
 	zslice = 7;
-	%TASK - work out the number of voxels we need to fit using nnz
-	nvox = 0;
+	%work out the number of voxels to fit
+	nvox = nnz(masks.all_masks(:,:,zslice))
 
 	for x = 1:Nx
 		for y = 1:Ny
 			for z = zslice
-				if masks.placenta_and_uterine_wall_mask(x,y,z) %fit for the placenta and uterine wall mask
-					%TASK - get the dmri measurement for this voxel
-					meas = 0;
+				if masks.placenta_and_uterine_wall_mask(x,y,z)
+					%get the measurement for this voxel
+					meas = double(squeeze(normdmri.img(x,y,z,:)));
 
 					%get this model's synthetic measurement function for passing to sumres
 					synthfun = str2func(['synth_' models{j}]);	
@@ -264,17 +219,17 @@ for j=1:length(models)
 					%define inline function for calculating sum of residuals for this model  
 					sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 
-					%TASK - minimize the sumres function for this model in this voxel, subject to initvals, minvals and maxvals, using the fmincon function
-					%[fitted_params_vox,fval_vox,exitflag] = fmincon();
 
-					%store the parameter values
+					[fitted_params_vox,fval_vox,exitflag] = fmincon(sumres,initvals.(models{j}),[],[],[],[],minvals.(models{j}),maxvals.(models{j}),[]);
+
+					%store the parameter values	
 					param_maps.(models{j})(x,y,z,:) = fitted_params_vox;
 
-					%TASK - calculate the BIC for this model in this voxel
-					loglik = 0;
-					nparams = 0;
-					ndata = 0;
-					BIC_vox = 0;
+					%calculate the BIC for this model in this voxel
+					loglik = -fval_vox;
+					nparams = length(fitted_params_vox);
+					ndata = length(meas);
+					BIC_vox = nparams*log(ndata) - 2*loglik;
 
 					%store the BIC value	
 					BIC_map.(models{j})(x,y,z) = BIC_vox;
@@ -290,22 +245,41 @@ end
 
 
 %TASK - use "plot_overlayed_images" to make a nice picture!
+%Try overlaying param_maps and BIC_maps over the first diffusion-weighted volume
+
+%plot ADC map 
+paramindex = 2;
+plot_options.colorbar = 1;
+plot_options.cmin = 0;
+plot_options.cmax = 0.01;
+plot_overlayed_images(dmri.img(:,:,zslice,1),param_maps.ADC(:,:,zslice,paramindex),masks.placenta_and_uterine_wall_mask(:,:,zslice),plot_options)
+
+
+%plot IVIM perfusion fraction 
+paramindex = 2;
+plot_options.colorbar = 1;
+plot_options.cmin = 0;
+plot_options.cmax = 1;
+plot_overlayed_images(dmri.img(:,:,zslice,1),param_maps.IVIM(:,:,zslice,2),masks.placenta_and_uterine_wall_mask(:,:,zslice),plot_options)
+
+%plot the difference in BIC between ADC and IVIM 
+plot_options.colorbar = 1;
+plot_options.cmin = -10;
+plot_options.cmax = 10;
+plot_overlayed_images(dmri.img(:,:,zslice,1),BIC_map.IVIM(:,:,zslice)-BIC_map.ADC(:,:,zslice),masks.placenta_and_uterine_wall_mask(:,:,zslice),plot_options)
 
 
 
-
-
-%% harder stuff! Fit some anisotropic models. These are trickier to fit.
+%harder stuff! Fit some anisotropic models. These are trickier to fit.
 %We'll start with Stick-ball, which is like IVIM, but models the fast-attenuating signal
 %with a "stick" compartment.
 % Again I'll give you skeleton code for just one model - if you have time you 
-% can fit more.
+% can fit more 
 
-%define the number of parameters in the stick-ball model
+%initialise the parameter and BIC map arrays
 nparam_StickBall = 6;
-%TASK - initialise the parameter and BIC map arrays
-param_maps.StickBall = 0;
-BIC_map.StickBall = 0;
+param_maps.StickBall = zeros([size(masks.all_masks) nparam_StickBall]);
+BIC_map.StickBall = zeros(size(masks.all_masks));
 
 
 %choose the initial, minimum, and maximum values for stick-ball models
@@ -323,15 +297,15 @@ for j=1:length(models)
 
 	%takes a long time so we'll only fit a single slice 
 	zslice = 7;
-	%TASK - work out the number of voxels to fit using nnz
-	nvox = 0;
+	%work out the number of voxels to fit
+	nvox = nnz(masks.all_masks(:,:,zslice))
 
 	for x = 1:Nx
 		for y = 1:Ny
 			for z = zslice
 				if masks.placenta_and_uterine_wall_mask(x,y,z)
-					%TASK - get the measurement for this voxel
-					meas = 0;
+					%get the measurement for this voxel
+					meas = double(squeeze(normdmri.img(x,y,z,:)));
 
 					%get this model's synthetic measurement function for passing to sumres
 					synthfun = str2func(['synth_' models{j}]);	
@@ -339,17 +313,17 @@ for j=1:length(models)
 					%define inline function for calculating sum of residuals for this model  
 					sumres = @(params) -RicianLogLik(meas, synthfun(params,grads), sigma);
 										
-					%TASK - minimize the sumres function for this model in this voxel, subject to initvals, minvals and maxvals, using the fmincon function
-					%[fitted_params_vox,fval_vox,exitflag] = fmincon();
+					%do the fit
+					[fitted_params_vox,fval_vox,exitflag] = fmincon(sumres,initvals.(models{j}),[],[],[],[],minvals.(models{j}),maxvals.(models{j}),[]);
 
 					%store the parameter values	
 					param_maps.(models{j})(x,y,z,:) = fitted_params_vox;
 
-					%TASK - calculate the BIC for this model in this voxel
-					loglik = 0;
-					nparams = 0;
-					ndata = 0;
-					BIC_vox = 0;
+					%calculate the BIC for this model in this voxel
+					loglik = -fval_vox;
+					nparams = length(fitted_params_vox);
+					ndata = length(meas);
+					BIC_vox = nparams*log(ndata) - 2*loglik;
 
 					%store the BIC value	
 					BIC_map.(models{j})(x,y,z) = BIC_vox;

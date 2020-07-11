@@ -21,7 +21,12 @@ function E = synth_IVIM(params,grads)
 %only need the b-values
 bvals = grads(:,4);
 
+S0=params(1);
+f=params(2);%perfusion fraction 
+dp=params(3);%pseudo diffusivity
+d=params(4);%diffusivity
 
+E = S0*( f * exp(-bvals.*dp) + (1-f) * exp(-bvals.*d) );  
 
 
 

@@ -105,10 +105,10 @@ if isfield(options,'colorbar') && options.colorbar
     %ylabel(c,options.colorbar_label)
     
     c=colorbar(ax2,'location','north','color',[1-eps 1 1]); 
-    shrink_colorbar(c)
-    if options.colorbar_label_on
-        ylabel(c,options.colorbar_label,'color',[1-eps 1 1])
-    end
+    %shrink_colorbar(c)
+    %if options.colorbar_label_on
+    %    ylabel(c,options.colorbar_label,'color',[1-eps 1 1])
+    %end
     if isfield(options,'colorbar_tick_on')
         if options.colorbar_tick_on
             set(c,'Ticks',[options.cmin options.cmax])
